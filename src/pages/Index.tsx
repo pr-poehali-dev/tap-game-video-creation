@@ -20,31 +20,90 @@ interface Achievement {
   icon: string;
 }
 
+const SAVE_KEY = 'tubecoins_save';
+
+const defaultAchievements: Achievement[] = [
+  { id: 1, title: 'Новичок', description: '10 тапов', target: 10, unlocked: false, icon: 'Hand' },
+  { id: 2, title: 'Активист', description: '50 тапов', target: 50, unlocked: false, icon: 'Zap' },
+  { id: 3, title: 'Энтузиаст', description: '100 тапов', target: 100, unlocked: false, icon: 'Star' },
+  { id: 4, title: 'Профи', description: '500 тапов', target: 500, unlocked: false, icon: 'Award' },
+  { id: 5, title: 'Легенда', description: '1000 тапов', target: 1000, unlocked: false, icon: 'Trophy' },
+];
+
+const loadGameData = () => {
+  try {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error('Error loading game data:', error);
+  }
+  return null;
+};
+
 export default function Index() {
-  const [coins, setCoins] = useState(0);
+  const savedData = loadGameData();
+  
+  const [coins, setCoins] = useState(savedData?.coins || 0);
   const [videoProgress, setVideoProgress] = useState(0);
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [videos, setVideos] = useState<Video[]>(savedData?.videos || []);
   const [clickAnimation, setClickAnimation] = useState(false);
   const [floatingCoins, setFloatingCoins] = useState<Array<{id: number, x: number, y: number}>>([]);
-  const [upgradeLevel, setUpgradeLevel] = useState(0);
-  const [coinsPerTap, setCoinsPerTap] = useState(1);
-  const [upgradeCost, setUpgradeCost] = useState(100);
+  const [upgradeLevel, setUpgradeLevel] = useState(savedData?.upgradeLevel || 0);
+  const [coinsPerTap, setCoinsPerTap] = useState(savedData?.coinsPerTap || 1);
+  const [upgradeCost, setUpgradeCost] = useState(savedData?.upgradeCost || 100);
   const [showUpgrades, setShowUpgrades] = useState(false);
   
-  const [autoIncomeLevel, setAutoIncomeLevel] = useState(0);
-  const [coinsPerSecond, setCoinsPerSecond] = useState(0);
-  const [autoIncomeCost, setAutoIncomeCost] = useState(300);
+  const [autoIncomeLevel, setAutoIncomeLevel] = useState(savedData?.autoIncomeLevel || 0);
+  const [coinsPerSecond, setCoinsPerSecond] = useState(savedData?.coinsPerSecond || 0);
+  const [autoIncomeCost, setAutoIncomeCost] = useState(savedData?.autoIncomeCost || 300);
   
-  const [totalTaps, setTotalTaps] = useState(0);
-  const [achievements, setAchievements] = useState<Achievement[]>([
-    { id: 1, title: 'Новичок', description: '10 тапов', target: 10, unlocked: false, icon: 'Hand' },
-    { id: 2, title: 'Активист', description: '50 тапов', target: 50, unlocked: false, icon: 'Zap' },
-    { id: 3, title: 'Энтузиаст', description: '100 тапов', target: 100, unlocked: false, icon: 'Star' },
-    { id: 4, title: 'Профи', description: '500 тапов', target: 500, unlocked: false, icon: 'Award' },
-    { id: 5, title: 'Легенда', description: '1000 тапов', target: 1000, unlocked: false, icon: 'Trophy' },
-  ]);
+  const [totalTaps, setTotalTaps] = useState(savedData?.totalTaps || 0);
+  const [achievements, setAchievements] = useState<Achievement[]>(savedData?.achievements || defaultAchievements);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [lastSaveTime, setLastSaveTime] = useState(savedData?.lastSaveTime || Date.now());
+
+  useEffect(() => {
+    const gameData = {
+      coins,
+      videos,
+      upgradeLevel,
+      coinsPerTap,
+      upgradeCost,
+      autoIncomeLevel,
+      coinsPerSecond,
+      autoIncomeCost,
+      totalTaps,
+      achievements,
+      lastSaveTime: Date.now()
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(gameData));
+  }, [coins, videos, upgradeLevel, coinsPerTap, upgradeCost, autoIncomeLevel, coinsPerSecond, autoIncomeCost, totalTaps, achievements]);
+
+  useEffect(() => {
+    const checkOfflineEarnings = () => {
+      const saved = loadGameData();
+      if (saved && saved.coinsPerSecond > 0) {
+        const timeAway = Math.floor((Date.now() - (saved.lastSaveTime || Date.now())) / 1000);
+        if (timeAway > 0 && timeAway < 86400) {
+          const offlineEarnings = Math.floor(timeAway * saved.coinsPerSecond);
+          if (offlineEarnings > 0) {
+            setCoins(prev => prev + offlineEarnings);
+            const minutes = Math.floor(timeAway / 60);
+            const hours = Math.floor(minutes / 60);
+            const timeText = hours > 0 ? `${hours}ч ${minutes % 60}м` : `${minutes}м`;
+            toast.success('Добро пожаловать! 🎮', {
+              description: `Пока вас не было заработано: ${offlineEarnings} монет (${timeText})`,
+              duration: 5000
+            });
+          }
+        }
+      }
+    };
+    checkOfflineEarnings();
+  }, []);
 
   useEffect(() => {
     if (coinsPerSecond > 0) {
@@ -68,7 +127,7 @@ export default function Index() {
         });
       }
     });
-  }, [totalTaps]);
+  }, [totalTaps, achievements]);
 
   const handleTap = () => {
     setCoins(prev => prev + coinsPerTap);
