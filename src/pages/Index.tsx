@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -9,6 +9,15 @@ interface Video {
   id: number;
   title: string;
   coins: number;
+}
+
+interface Achievement {
+  id: number;
+  title: string;
+  description: string;
+  target: number;
+  unlocked: boolean;
+  icon: string;
 }
 
 export default function Index() {
@@ -22,9 +31,48 @@ export default function Index() {
   const [coinsPerTap, setCoinsPerTap] = useState(1);
   const [upgradeCost, setUpgradeCost] = useState(100);
   const [showUpgrades, setShowUpgrades] = useState(false);
+  
+  const [autoIncomeLevel, setAutoIncomeLevel] = useState(0);
+  const [coinsPerSecond, setCoinsPerSecond] = useState(0);
+  const [autoIncomeCost, setAutoIncomeCost] = useState(300);
+  
+  const [totalTaps, setTotalTaps] = useState(0);
+  const [achievements, setAchievements] = useState<Achievement[]>([
+    { id: 1, title: 'Новичок', description: '10 тапов', target: 10, unlocked: false, icon: 'Hand' },
+    { id: 2, title: 'Активист', description: '50 тапов', target: 50, unlocked: false, icon: 'Zap' },
+    { id: 3, title: 'Энтузиаст', description: '100 тапов', target: 100, unlocked: false, icon: 'Star' },
+    { id: 4, title: 'Профи', description: '500 тапов', target: 500, unlocked: false, icon: 'Award' },
+    { id: 5, title: 'Легенда', description: '1000 тапов', target: 1000, unlocked: false, icon: 'Trophy' },
+  ]);
+  const [showAchievements, setShowAchievements] = useState(false);
+
+  useEffect(() => {
+    if (coinsPerSecond > 0) {
+      const interval = setInterval(() => {
+        setCoins(prev => prev + coinsPerSecond);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [coinsPerSecond]);
+
+  useEffect(() => {
+    achievements.forEach(achievement => {
+      if (!achievement.unlocked && totalTaps >= achievement.target) {
+        setAchievements(prev => 
+          prev.map(a => a.id === achievement.id ? { ...a, unlocked: true } : a)
+        );
+        const reward = achievement.target * 2;
+        setCoins(prev => prev + reward);
+        toast.success(`Достижение разблокировано! 🏆`, {
+          description: `${achievement.title}: +${reward} монет`
+        });
+      }
+    });
+  }, [totalTaps]);
 
   const handleTap = () => {
     setCoins(prev => prev + coinsPerTap);
+    setTotalTaps(prev => prev + 1);
     setClickAnimation(true);
     setTimeout(() => setClickAnimation(false), 300);
     
@@ -58,6 +106,28 @@ export default function Index() {
     
     toast.success('Улучшение куплено! 🚀', {
       description: `Теперь за тап: ${newCoinsPerTap} монет`
+    });
+  };
+
+  const handleAutoIncomeUpgrade = () => {
+    if (coins < autoIncomeCost) {
+      toast.error('Недостаточно монет!', {
+        description: `Нужно ещё ${autoIncomeCost - coins} TubeCoins`
+      });
+      return;
+    }
+
+    setCoins(prev => prev - autoIncomeCost);
+    setAutoIncomeLevel(prev => prev + 1);
+    
+    const newCoinsPerSecond = autoIncomeLevel === 0 ? 5 : coinsPerSecond + 10;
+    const newAutoIncomeCost = autoIncomeLevel === 0 ? 800 : autoIncomeCost + 700;
+    
+    setCoinsPerSecond(newCoinsPerSecond);
+    setAutoIncomeCost(newAutoIncomeCost);
+    
+    toast.success('Автодоход куплен! ⚡', {
+      description: `Теперь в секунду: ${newCoinsPerSecond} монет`
     });
   };
 
@@ -101,19 +171,100 @@ export default function Index() {
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#2D1B4E] to-[#1A1F2C] flex flex-col items-center justify-center p-4 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(139,92,246,0.1),transparent_50%)]" />
       
-      <div className="fixed top-4 right-4 z-20">
+      <div className="fixed top-4 right-4 z-20 flex gap-2">
+        <Button
+          onClick={() => setShowAchievements(!showAchievements)}
+          className="bg-gradient-to-r from-[#F97316] to-[#D946EF] hover:opacity-90 shadow-2xl relative"
+          size="lg"
+        >
+          <Icon name="Trophy" size={20} className="mr-2" />
+          <span className="hidden sm:inline">Достижения</span>
+          {achievements.filter(a => a.unlocked).length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full text-xs flex items-center justify-center">
+              {achievements.filter(a => a.unlocked).length}
+            </span>
+          )}
+        </Button>
         <Button
           onClick={() => setShowUpgrades(!showUpgrades)}
           className="bg-gradient-to-r from-[#8B5CF6] to-[#D946EF] hover:opacity-90 shadow-2xl"
           size="lg"
         >
           <Icon name="Zap" size={20} className="mr-2" />
-          Улучшения
+          <span className="hidden sm:inline">Улучшения</span>
         </Button>
       </div>
 
+      {showAchievements && (
+        <Card className="fixed top-20 right-4 z-20 w-80 bg-card/95 backdrop-blur-xl border-primary/30 p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                <Icon name="Trophy" size={24} />
+                Достижения
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAchievements(false)}
+                className="text-white/60 hover:text-white"
+              >
+                <Icon name="X" size={20} />
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-white/60">
+                <span>Прогресс:</span>
+                <span>{achievements.filter(a => a.unlocked).length} / {achievements.length}</span>
+              </div>
+              <Progress value={(achievements.filter(a => a.unlocked).length / achievements.length) * 100} className="h-2" />
+            </div>
+
+            <div className="space-y-2">
+              {achievements.map(achievement => (
+                <div
+                  key={achievement.id}
+                  className={`p-3 rounded-lg border transition-all ${
+                    achievement.unlocked 
+                      ? 'bg-primary/20 border-primary/40' 
+                      : 'bg-muted/20 border-muted/20 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      achievement.unlocked
+                        ? 'bg-gradient-to-br from-[#F97316] to-[#D946EF]'
+                        : 'bg-muted/50'
+                    }`}>
+                      <Icon name={achievement.icon as any} size={20} className="text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white font-semibold text-sm">{achievement.title}</p>
+                      <p className="text-xs text-white/60">{achievement.description}</p>
+                      <div className="mt-1">
+                        <div className="text-xs text-white/40">
+                          {totalTaps} / {achievement.target} тапов
+                        </div>
+                        <Progress 
+                          value={Math.min((totalTaps / achievement.target) * 100, 100)} 
+                          className="h-1 mt-1" 
+                        />
+                      </div>
+                    </div>
+                    {achievement.unlocked && (
+                      <Icon name="CheckCircle" size={20} className="text-green-400" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
+
       {showUpgrades && (
-        <Card className="fixed top-20 right-4 z-20 w-80 bg-card/95 backdrop-blur-xl border-primary/30 p-6 shadow-2xl">
+        <Card className="fixed top-20 right-4 z-20 w-80 bg-card/95 backdrop-blur-xl border-primary/30 p-6 shadow-2xl max-h-[80vh] overflow-y-auto">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -164,9 +315,43 @@ export default function Index() {
               </Button>
             </div>
             
+            <div className="p-4 rounded-lg bg-muted/30 border border-accent/20">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#8B5CF6] to-[#0EA5E9] flex items-center justify-center">
+                  <Icon name="Timer" size={24} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Автодоход {autoIncomeLevel > 0 ? `ур. ${autoIncomeLevel}` : ''}</p>
+                  <p className="text-sm text-white/60">Монеты в секунду</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/60">Сейчас в секунду:</span>
+                  <span className="text-white font-semibold">{coinsPerSecond} монет</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/60">Следующий доход:</span>
+                  <span className="text-green-400 font-semibold">
+                    {autoIncomeLevel === 0 ? 5 : coinsPerSecond + 10} монет/сек
+                  </span>
+                </div>
+              </div>
+              
+              <Button
+                onClick={handleAutoIncomeUpgrade}
+                disabled={coins < autoIncomeCost}
+                className="w-full bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90 disabled:opacity-50"
+              >
+                <Icon name="Clock" size={16} className="mr-2" />
+                Купить за {autoIncomeCost}
+              </Button>
+            </div>
+            
             <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
               <p className="text-xs text-white/60 text-center">
-                💡 Каждое улучшение увеличивает доход и стоимость следующего уровня
+                💡 Улучшай тап и автодоход для максимального заработка!
               </p>
             </div>
           </div>
@@ -189,7 +374,19 @@ export default function Index() {
               </div>
               <div>
                 <p className="text-white/60 text-sm">Баланс</p>
-                <p className="text-3xl font-bold text-white">{coins}</p>
+                <p className="text-3xl font-bold text-white">{Math.floor(coins)}</p>
+                {coinsPerSecond > 0 && (
+                  <p className="text-xs text-green-400 flex items-center gap-1">
+                    <Icon name="TrendingUp" size={12} />
+                    +{coinsPerSecond}/сек
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <p className="text-white/60 text-xs">Всего тапов</p>
+                <p className="text-lg font-bold text-white">{totalTaps}</p>
               </div>
             </div>
           </div>
@@ -285,10 +482,15 @@ export default function Index() {
           </Card>
         )}
 
-        <div className="text-center">
+        <div className="text-center space-y-2">
           <p className="text-white/40 text-sm">
             Нажимай на кнопку, создавай видео и зарабатывай TubeCoins! 💰
           </p>
+          <div className="flex items-center justify-center gap-4 text-xs text-white/30">
+            <span>⚡ Тап: +{coinsPerTap}</span>
+            {coinsPerSecond > 0 && <span>⏱️ Авто: +{coinsPerSecond}/сек</span>}
+            <span>🏆 {achievements.filter(a => a.unlocked).length}/{achievements.length}</span>
+          </div>
         </div>
       </div>
     </div>
